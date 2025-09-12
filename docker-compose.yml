@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  # Frontend web server
+  web:
+    build: .
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+      - redis
+      - postgres
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - clonegallery-network
+
+  # Backend API server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/data/clonegallery.db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODEL_CACHE_DIR=/app/models
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./uploads:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - clonegallery-network
+
+  # PostgreSQL Database service (Production)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=clonegallery
+      - POSTGRES_USER=clonegallery
+      - POSTGRES_PASSWORD=clonegallery
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/postgresql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - clonegallery-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clonegallery -d clonegallery"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # SQLite Database service (Development)
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      - DATABASE_PATH=/app/data/clonegallery.db
+    volumes:
+      - db-data:/app/data
+      - ./database:/app/database
+    command: >
+      sh -c "
+        echo '🗄️  Starting SQLite database service...' &&
+        python /app/database/migrate.py migrate &&
+        python /app/database/seed.py seed &&
+        echo '✅ SQLite Database ready!' &&
+        tail -f /dev/null
+      "
+    networks:
+      - clonegallery-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sqlite3; conn = sqlite3.connect('/app/data/clonegallery.db'); conn.execute('SELECT 1'); conn.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - development
+
+  # Redis for caching and job queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - clonegallery-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Database migration service (runs once)
+  db-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      - DATABASE_PATH=/app/data/clonegallery.db
+    volumes:
+      - db-data:/app/data
+      - ./database:/app/database
+    command: python /app/database/migrate.py migrate
+    networks:
+      - clonegallery-network
+    profiles:
+      - migrate
+
+  # Database seeder service (runs once)
+  db-seed:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      - DATABASE_PATH=/app/data/clonegallery.db
+    volumes:
+      - db-data:/app/data
+      - ./database:/app/database
+    command: python /app/database/seed.py seed
+    networks:
+      - clonegallery-network
+    profiles:
+      - seed
+
+  # Database reset service (runs once)
+  db-reset:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      - DATABASE_PATH=/app/data/clonegallery.db
+    volumes:
+      - db-data:/app/data
+      - ./database:/app/database
+    command: python /app/database/seed.py reset
+    networks:
+      - clonegallery-network
+    profiles:
+      - reset
+
+volumes:
+  postgres-data:
+    driver: local
+  db-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  clonegallery-network:
+    driver: bridge

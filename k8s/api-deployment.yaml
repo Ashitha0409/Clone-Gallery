@@ -1,0 +1,177 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: clonegallery
+  labels:
+    app: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: clonegallery-api:latest  # Build and push this image
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DB_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: DB_TYPE
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: REDIS_PORT
+        - name: AI_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: AI_PROVIDER
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: JWT_SECRET
+        - name: REPLICATE_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: REPLICATE_API_TOKEN
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: OPENAI_API_KEY
+        - name: STORAGE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: STORAGE_TYPE
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: S3_BUCKET
+        - name: S3_THUMBNAIL_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: S3_THUMBNAIL_BUCKET
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: AWS_REGION
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      initContainers:
+      - name: db-migrate
+        image: clonegallery-api:latest
+        command: ["python", "/app/database/postgresql/migrate.py", "migrate"]
+        env:
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: clonegallery-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clonegallery-secrets
+              key: POSTGRES_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: clonegallery
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP

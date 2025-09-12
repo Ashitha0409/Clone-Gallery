@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clonegallery-config
+  namespace: clonegallery
+data:
+  # Database configuration
+  DB_TYPE: "postgresql"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "clonegallery"
+  POSTGRES_USER: "clonegallery"
+  
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  
+  # AI Provider configuration
+  AI_PROVIDER: "replicate"  # or "local" for GPU-enabled clusters
+  
+  # Storage configuration
+  STORAGE_TYPE: "s3"
+  S3_BUCKET: "clonegallery-images"
+  S3_THUMBNAIL_BUCKET: "clonegallery-thumbnails"
+  AWS_REGION: "us-east-1"
+  
+  # JWT configuration
+  JWT_SECRET: "your-production-secret-key-change-this"
+  JWT_ALGORITHM: "HS256"
+  
+  # API configuration
+  API_URL: "http://api-service:8000"

@@ -1,0 +1,51 @@
+# MinIO S3-compatible storage for CloneGallery
+# Use this for local development with S3-compatible storage
+
+version: '3.8'
+
+services:
+  # MinIO S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=clonegallery
+      - MINIO_ROOT_PASSWORD=clonegallery123
+    ports:
+      - "9000:9000"  # API port
+      - "9001:9001"  # Console port
+    volumes:
+      - minio-data:/data
+    networks:
+      - clonegallery-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO client for bucket creation
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      /usr/bin/mc alias set myminio http://minio:9000 clonegallery clonegallery123;
+      /usr/bin/mc mb myminio/clonegallery-images --ignore-existing;
+      /usr/bin/mc mb myminio/clonegallery-thumbnails --ignore-existing;
+      /usr/bin/mc policy set public myminio/clonegallery-images;
+      /usr/bin/mc policy set public myminio/clonegallery-thumbnails;
+      echo 'MinIO setup complete';
+      "
+    networks:
+      - clonegallery-network
+
+volumes:
+  minio-data:
+    driver: local
+
+networks:
+  clonegallery-network:
+    driver: bridge

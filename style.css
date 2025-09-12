@@ -1727,6 +1727,176 @@ select.form-control {
     gap: var(--space-12);
 }
 
+.image-actions .btn.liked {
+    background: var(--color-error);
+    color: var(--color-surface);
+    border-color: var(--color-error);
+}
+
+.image-actions .btn.liked:hover {
+    background: var(--color-error-dark);
+    border-color: var(--color-error-dark);
+}
+
+/* Image Editor Modal */
+.image-editor-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 1200px;
+    height: 800px;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-16) var(--space-24);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.editor-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.editor-canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-secondary);
+    position: relative;
+}
+
+#editor-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    box-shadow: var(--shadow-lg);
+}
+
+.editor-controls {
+    width: 300px;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-surface);
+    overflow-y: auto;
+}
+
+.editor-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.editor-tab {
+    flex: 1;
+    padding: var(--space-12) var(--space-8);
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.editor-tab:hover {
+    background: var(--color-surface-secondary);
+    color: var(--color-text);
+}
+
+.editor-tab.active {
+    background: var(--color-primary);
+    color: var(--color-surface);
+}
+
+.editor-panel {
+    display: none;
+    padding: var(--space-20);
+}
+
+.editor-panel.active {
+    display: block;
+}
+
+.editor-panel h3 {
+    margin: 0 0 var(--space-16) 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+}
+
+.crop-controls,
+.resize-controls,
+.adjust-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+}
+
+.crop-buttons,
+.resize-buttons,
+.adjust-buttons {
+    display: flex;
+    gap: var(--space-8);
+    margin-top: var(--space-16);
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-8);
+}
+
+.filter-btn {
+    padding: var(--space-12);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-standard);
+    font-size: var(--font-size-sm);
+}
+
+.filter-btn:hover {
+    background: var(--color-surface-secondary);
+    border-color: var(--color-primary);
+}
+
+.filter-btn.active {
+    background: var(--color-primary);
+    color: var(--color-surface);
+    border-color: var(--color-primary);
+}
+
+.editor-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-12);
+    padding: var(--space-16) var(--space-24);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+/* Upload Item with Edit Button */
+.upload-item {
+    position: relative;
+}
+
+.upload-item-actions {
+    position: absolute;
+    top: var(--space-8);
+    right: var(--space-8);
+    display: flex;
+    gap: var(--space-8);
+}
+
+.upload-item-actions .btn {
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--font-size-xs);
+}
+
 /* Toast Notifications */
 .toast-container {
     position: fixed;

@@ -254,6 +254,115 @@
                 </div>
             </div>
 
+            <!-- Image Editor Modal -->
+            <div id="image-editor-modal" class="modal hidden">
+                <div class="modal-backdrop"></div>
+                <div class="modal-content image-editor-content">
+                    <div class="editor-header">
+                        <h2>Edit Image</h2>
+                        <button class="btn btn--outline btn--sm" id="editor-close">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                    </div>
+                    <div class="editor-body">
+                        <div class="editor-canvas-container">
+                            <canvas id="editor-canvas"></canvas>
+                        </div>
+                        <div class="editor-controls">
+                            <div class="editor-tabs">
+                                <button class="editor-tab active" data-tab="crop">Crop</button>
+                                <button class="editor-tab" data-tab="resize">Resize</button>
+                                <button class="editor-tab" data-tab="filters">Filters</button>
+                                <button class="editor-tab" data-tab="adjust">Adjust</button>
+                            </div>
+                            
+                            <div class="editor-panel active" id="crop-panel">
+                                <h3>Crop Image</h3>
+                                <div class="crop-controls">
+                                    <div class="form-group">
+                                        <label>Preset Ratios</label>
+                                        <select id="crop-ratio" class="form-control">
+                                            <option value="free">Free</option>
+                                            <option value="1:1">Square (1:1)</option>
+                                            <option value="4:3">4:3</option>
+                                            <option value="16:9">16:9</option>
+                                            <option value="3:2">3:2</option>
+                                        </select>
+                                    </div>
+                                    <div class="crop-buttons">
+                                        <button class="btn btn--outline" id="crop-reset">Reset</button>
+                                        <button class="btn btn--primary" id="crop-apply">Apply Crop</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="editor-panel" id="resize-panel">
+                                <h3>Resize Image</h3>
+                                <div class="resize-controls">
+                                    <div class="form-group">
+                                        <label>Width (px)</label>
+                                        <input type="number" id="resize-width" class="form-control" min="1" max="4000">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Height (px)</label>
+                                        <input type="number" id="resize-height" class="form-control" min="1" max="4000">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>
+                                            <input type="checkbox" id="maintain-aspect" checked> Maintain Aspect Ratio
+                                        </label>
+                                    </div>
+                                    <div class="resize-buttons">
+                                        <button class="btn btn--outline" id="resize-reset">Reset</button>
+                                        <button class="btn btn--primary" id="resize-apply">Apply Resize</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="editor-panel" id="filters-panel">
+                                <h3>Apply Filters</h3>
+                                <div class="filter-grid">
+                                    <button class="filter-btn" data-filter="none">Original</button>
+                                    <button class="filter-btn" data-filter="grayscale">Grayscale</button>
+                                    <button class="filter-btn" data-filter="sepia">Sepia</button>
+                                    <button class="filter-btn" data-filter="vintage">Vintage</button>
+                                    <button class="filter-btn" data-filter="blur">Blur</button>
+                                    <button class="filter-btn" data-filter="sharpen">Sharpen</button>
+                                    <button class="filter-btn" data-filter="brightness">Bright</button>
+                                    <button class="filter-btn" data-filter="contrast">High Contrast</button>
+                                </div>
+                            </div>
+                            
+                            <div class="editor-panel" id="adjust-panel">
+                                <h3>Adjustments</h3>
+                                <div class="adjust-controls">
+                                    <div class="form-group">
+                                        <label>Brightness: <span id="brightness-value">0</span></label>
+                                        <input type="range" id="brightness" class="form-control" min="-100" max="100" value="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Contrast: <span id="contrast-value">0</span></label>
+                                        <input type="range" id="contrast" class="form-control" min="-100" max="100" value="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Saturation: <span id="saturation-value">0</span></label>
+                                        <input type="range" id="saturation" class="form-control" min="-100" max="100" value="0">
+                                    </div>
+                                    <div class="adjust-buttons">
+                                        <button class="btn btn--outline" id="adjust-reset">Reset</button>
+                                        <button class="btn btn--primary" id="adjust-apply">Apply</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="editor-footer">
+                        <button class="btn btn--outline" id="editor-cancel">Cancel</button>
+                        <button class="btn btn--primary" id="editor-save">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Albums Page -->
             <div id="albums-page" class="page hidden">
                 <div class="page-header">

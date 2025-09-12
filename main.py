@@ -2,10 +2,10 @@ import asyncio
 import base64
 import io
 import os
-from typing import Optional, List
+from typing import Optional, List, Union
 import redis
 import torch
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from PIL import Image
@@ -13,6 +13,10 @@ import numpy as np
 from transformers import CLIPProcessor, CLIPModel
 from diffusers import StableDiffusionPipeline, DiffusionPipeline
 import logging
+import sqlite3
+import psycopg2
+import psycopg2.extras
+from contextlib import asynccontextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

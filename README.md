@@ -8,24 +8,47 @@ A production-ready image gallery platform with AI-powered features, vector searc
 
 ## 🚀 Quick Start
 
-Get CloneGallery running locally with one command:
+### Option 1: Docker Deployment (Recommended)
+
+Get CloneGallery running with one command:
+
+**Windows:**
+```bash
+git clone https://github.com/username/clonegallery.git
+cd clonegallery
+deploy.bat
+```
+
+**Linux/Mac:**
+```bash
+git clone https://github.com/username/clonegallery.git
+cd clonegallery
+chmod +x deploy.sh
+./deploy.sh
+```
+
+**That's it!** The script will:
+- Set up all services (Frontend, API, Database, Redis)
+- Initialize SQLite database with sample data
+- Start AI image generation service
+- Launch the application at http://localhost:3000
+
+### Option 2: Manual Setup
 
 ```bash
 git clone https://github.com/username/clonegallery.git
 cd clonegallery
-chmod +x start.sh
-./start.sh
+npm install
+pip install -r requirements.txt
+python database/init.py
+python main.py  # Terminal 1
+npm run dev     # Terminal 2
 ```
 
-**That's it!** The script will:
-- Set up all services (Laravel, PostgreSQL, Redis, MinIO, Milvus, AI)
-- Run database migrations and seed demo data
-- Configure storage and vector search
-- Start the application at http://localhost
-
-### Default Admin Credentials
-- **Email**: admin@clonegallery.local
-- **Password**: admin123
+### Demo Accounts
+- **Admin**: admin@clonegallery.local (Full access + AI generation)
+- **Editor**: editor@clonegallery.local (Upload + edit)
+- **Visitor**: user@clonegallery.local (View + like)
 
 ## 📋 Table of Contents
 
@@ -45,6 +68,9 @@ chmod +x start.sh
 
 ### Core Functionality
 - **Multi-format Upload**: JPEG, PNG, GIF, WebP, AVIF with chunked upload support
+- **Image Editing**: Built-in editor with crop, resize, filters, and adjustments
+- **AI Image Generation**: Create images using Stable Diffusion models
+- **Smart Like System**: One like per user per image with real-time updates
 - **Responsive Images**: Automatic generation of optimized sizes (AVIF/WebP/JPEG fallbacks)
 - **Album Management**: Organize images into collections with drag-and-drop ordering
 - **Advanced Search**: Full-text search + AI-powered semantic vector search
@@ -53,6 +79,14 @@ chmod +x start.sh
 ### AI & ML Features
 - **Vector Search**: CLIP-based semantic similarity search for images and text
 - **AI Generation**: Optional Stable Diffusion integration for image creation
+- **Image Processing**: Real-time filters and adjustments using Canvas API
+
+### Image Editing Features
+- **Crop Tool**: Multiple aspect ratios (1:1, 4:3, 16:9, 3:2) with free-form option
+- **Resize Tool**: Custom dimensions with aspect ratio preservation
+- **Filter Effects**: Grayscale, Sepia, Vintage, Brightness, Contrast
+- **Adjustments**: Brightness, Contrast, Saturation sliders with real-time preview
+- **Canvas-based Editing**: High-performance image manipulation
 - **Smart Tagging**: Automatic tag suggestions based on image content
 - **Duplicate Detection**: Perceptual hashing to identify similar images
 

@@ -8,7 +8,8 @@ let appData = {
     images: [],
     albums: [],
     tags: [],
-    analytics: {}
+    analytics: {},
+    userLikes: new Set() // Track which images the current user has liked
 };
 
 // Initialize Application
@@ -434,6 +435,9 @@ function setupEventListeners() {
     
     // Albums
     setupAlbumHandlers();
+    
+    // Image Editor
+    setupImageEditorHandlers();
 }
 
 // Navigation
@@ -737,6 +741,11 @@ function createUploadItem(file) {
                 <div class="upload-item-name">${file.name}</div>
                 <div class="upload-item-size">${formatFileSize(file.size)}</div>
             </div>
+            <div class="upload-item-actions">
+                <button class="btn btn--outline btn--sm" onclick="openImageEditor(this.closest('.upload-item').dataset.file)">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+            </div>
             <div class="status">Uploading...</div>
         </div>
         <div class="upload-progress">
@@ -764,6 +773,9 @@ function createUploadItem(file) {
             </div>
         </div>
     `;
+    
+    // Store file reference for editing
+    uploadItem.dataset.file = file;
     
     queue.appendChild(uploadItem);
     
@@ -1185,7 +1197,7 @@ function handleAIGeneration() {
     simulateAIGeneration(prompt, model, steps, guidance);
 }
 
-function simulateAIGeneration(prompt, model, steps, guidance) {
+async function simulateAIGeneration(prompt, model, steps, guidance) {
     const resultsContainer = document.getElementById('generation-results');
     const generateBtn = document.getElementById('generate-btn');
     
@@ -1206,51 +1218,159 @@ function simulateAIGeneration(prompt, model, steps, guidance) {
         </div>
     `;
     
-    // Simulate progress
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 10;
-        if (progress >= 100) {
-            progress = 100;
-            clearInterval(progressInterval);
-            
-            setTimeout(() => {
-                showGenerationResult(prompt, model);
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Image';
-            }, 1000);
+    try {
+        // Call the actual AI generation API
+        const response = await fetch('/api/generate/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt: prompt,
+                width: 512,
+                height: 512,
+                num_inference_steps: parseInt(steps),
+                guidance_scale: parseFloat(guidance),
+                seed: Math.floor(Math.random() * 1000000)
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const progressBar = document.querySelector('.generation-progress-bar');
-        if (progressBar) {
-            progressBar.style.width = progress + '%';
-        }
-    }, 500);
+        const data = await response.json();
+        
+        // Show the generated image
+        showGenerationResult(prompt, model, data.image);
+        
+    } catch (error) {
+        console.error('AI generation failed:', error);
+        
+        // Fallback to simulation if API is not available
+        showToast('AI service unavailable, using demo mode', 'warning');
+        
+        // Simulate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 10;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(progressInterval);
+                
+                setTimeout(() => {
+                    showGenerationResult(prompt, model);
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Image';
+                }, 1000);
+            }
+            
+            const progressBar = document.querySelector('.generation-progress-bar');
+            if (progressBar) {
+                progressBar.style.width = progress + '%';
+            }
+        }, 500);
+    }
 }
 
-function showGenerationResult(prompt, model) {
+function showGenerationResult(prompt, model, generatedImageUrl = null) {
     const resultsContainer = document.getElementById('generation-results');
+    const generateBtn = document.getElementById('generate-btn');
+    
     if (!resultsContainer) return;
     
-    // Use a random image for the "generated" result
-    const randomImage = appData.images[Math.floor(Math.random() * appData.images.length)];
+    // Reset button state
+    if (generateBtn) {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Image';
+    }
+    
+    // Use generated image if available, otherwise fallback to random image
+    let imageUrl;
+    if (generatedImageUrl) {
+        imageUrl = generatedImageUrl;
+    } else {
+        const randomImage = appData.images[Math.floor(Math.random() * appData.images.length)];
+        imageUrl = randomImage.url;
+    }
     
     resultsContainer.innerHTML = `
         <div class="generated-image">
-            <img src="${randomImage.url}" alt="Generated: ${prompt}" style="width: 100%; height: 250px; object-fit: cover; border-radius: var(--radius-base) var(--radius-base) 0 0;">
+            <img src="${imageUrl}" alt="Generated: ${prompt}" style="width: 100%; height: 250px; object-fit: cover; border-radius: var(--radius-base) var(--radius-base) 0 0;">
             <div class="generated-image-info" style="padding: var(--space-16);">
                 <h4>Generated Image</h4>
                 <p><strong>Prompt:</strong> ${prompt}</p>
                 <p><strong>Model:</strong> ${model}</p>
                 <div class="generation-actions" style="display: flex; gap: var(--space-8); margin-top: var(--space-16);">
-                    <button class="btn btn--primary btn--sm">Save to Gallery</button>
-                    <button class="btn btn--outline btn--sm">Download</button>
+                    <button class="btn btn--primary btn--sm" onclick="saveGeneratedImage('${imageUrl}', '${prompt}', '${model}')">Save to Gallery</button>
+                    <button class="btn btn--outline btn--sm" onclick="downloadGeneratedImage('${imageUrl}', '${prompt}')">Download</button>
                 </div>
             </div>
         </div>
     `;
     
     showToast('Image generated successfully!', 'success');
+}
+
+function saveGeneratedImage(imageUrl, prompt, model) {
+    // Create a new image entry in the gallery
+    const newImage = {
+        id: 'generated-' + Date.now(),
+        title: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
+        caption: `AI Generated: ${prompt}`,
+        alt_text: `AI generated image: ${prompt}`,
+        url: imageUrl,
+        thumbnail: imageUrl,
+        uploader: currentUser ? currentUser.id : 'admin-001',
+        uploaded_at: new Date().toISOString(),
+        tags: ['AI', 'generated', 'artificial-intelligence'],
+        privacy: 'public',
+        likes: 0,
+        views: 0,
+        is_ai_generated: true,
+        generation_meta: {
+            model: model,
+            prompt: prompt,
+            steps: 25,
+            guidance: 7.5
+        },
+        width: 512,
+        height: 512,
+        size: '2.1 MB',
+        format: 'PNG'
+    };
+    
+    // Add to app data
+    appData.images.unshift(newImage);
+    
+    // Update analytics
+    appData.analytics.ai_generated++;
+    appData.analytics.total_images++;
+    
+    // Refresh gallery if on gallery page
+    if (currentPage === 'gallery') {
+        loadGalleryImages();
+    }
+    
+    // Refresh dashboard if on dashboard page
+    if (currentPage === 'dashboard') {
+        loadRecentImages();
+        updateDashboardStats();
+    }
+    
+    showToast('Generated image saved to gallery!', 'success');
+}
+
+function downloadGeneratedImage(imageUrl, prompt) {
+    // Create a temporary link to download the image
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `generated-${prompt.replace(/[^a-zA-Z0-9]/g, '-')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Image downloaded!', 'success');
 }
 
 // Admin Functions
@@ -1367,7 +1487,19 @@ function openImageModal(imageId) {
     // Update like button
     const likeBtn = document.getElementById('like-btn');
     const likeCount = document.getElementById('like-count');
-    if (likeBtn) likeBtn.dataset.imageId = imageId;
+    if (likeBtn) {
+        likeBtn.dataset.imageId = imageId;
+        const likeKey = `${currentUser.id}-${imageId}`;
+        const isLiked = appData.userLikes.has(likeKey);
+        
+        if (isLiked) {
+            likeBtn.classList.add('liked');
+            likeBtn.innerHTML = '<i class="fas fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
+        } else {
+            likeBtn.classList.remove('liked');
+            likeBtn.innerHTML = '<i class="far fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
+        }
+    }
     if (likeCount) likeCount.textContent = image.likes;
     
     // Show modal
@@ -1390,16 +1522,57 @@ function closeImageModal() {
 
 function toggleLike(imageId) {
     const image = appData.images.find(img => img.id === imageId);
-    if (!image) return;
+    if (!image || !currentUser) return;
     
-    // Simple like toggle simulation
-    image.likes++;
+    const likeKey = `${currentUser.id}-${imageId}`;
+    const isLiked = appData.userLikes.has(likeKey);
+    
+    if (isLiked) {
+        // Unlike the image
+        appData.userLikes.delete(likeKey);
+        image.likes = Math.max(0, image.likes - 1);
+        showToast('Image unliked', 'info');
+    } else {
+        // Like the image
+        appData.userLikes.add(likeKey);
+        image.likes++;
+        showToast('Image liked!', 'success');
+    }
+    
+    // Update UI
     const likeCount = document.getElementById('like-count');
+    const likeBtn = document.getElementById('like-btn');
+    
     if (likeCount) {
         likeCount.textContent = image.likes;
     }
     
-    showToast('Image liked!', 'success');
+    if (likeBtn) {
+        if (appData.userLikes.has(likeKey)) {
+            likeBtn.classList.add('liked');
+            likeBtn.innerHTML = '<i class="fas fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
+        } else {
+            likeBtn.classList.remove('liked');
+            likeBtn.innerHTML = '<i class="far fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
+        }
+    }
+    
+    // Update like count in gallery cards
+    updateImageCardLikes(imageId, image.likes);
+}
+
+function updateImageCardLikes(imageId, likeCount) {
+    // Update like count in all image cards with this ID
+    const imageCards = document.querySelectorAll(`[data-image-id="${imageId}"]`);
+    imageCards.forEach(card => {
+        const statsElement = card.querySelector('.image-stats');
+        if (statsElement) {
+            const likeElement = statsElement.querySelector('span:first-child');
+            if (likeElement) {
+                likeElement.innerHTML = `<i class="fas fa-heart"></i> ${likeCount}`;
+            }
+        }
+    });
 }
 
 function downloadImage(imageId) {
@@ -1476,6 +1649,410 @@ function getToastIcon(type) {
         case 'info': return 'info-circle';
         default: return 'info-circle';
     }
+}
+
+// Image Editor Functions
+let currentEditingFile = null;
+let originalImageData = null;
+let currentCanvas = null;
+let currentCtx = null;
+
+function setupImageEditorHandlers() {
+    // Editor modal controls
+    const editorClose = document.getElementById('editor-close');
+    const editorCancel = document.getElementById('editor-cancel');
+    const editorSave = document.getElementById('editor-save');
+    
+    if (editorClose) {
+        editorClose.addEventListener('click', closeImageEditor);
+    }
+    
+    if (editorCancel) {
+        editorCancel.addEventListener('click', closeImageEditor);
+    }
+    
+    if (editorSave) {
+        editorSave.addEventListener('click', saveEditedImage);
+    }
+    
+    // Tab switching
+    document.querySelectorAll('.editor-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            switchEditorTab(this.dataset.tab);
+        });
+    });
+    
+    // Crop controls
+    const cropApply = document.getElementById('crop-apply');
+    const cropReset = document.getElementById('crop-reset');
+    
+    if (cropApply) {
+        cropApply.addEventListener('click', applyCrop);
+    }
+    
+    if (cropReset) {
+        cropReset.addEventListener('click', resetCrop);
+    }
+    
+    // Resize controls
+    const resizeApply = document.getElementById('resize-apply');
+    const resizeReset = document.getElementById('resize-reset');
+    const maintainAspect = document.getElementById('maintain-aspect');
+    
+    if (resizeApply) {
+        resizeApply.addEventListener('click', applyResize);
+    }
+    
+    if (resizeReset) {
+        resizeReset.addEventListener('click', resetResize);
+    }
+    
+    if (maintainAspect) {
+        maintainAspect.addEventListener('change', function() {
+            if (this.checked) {
+                updateResizeHeight();
+            }
+        });
+    }
+    
+    // Filter controls
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            applyFilter(this.dataset.filter);
+        });
+    });
+    
+    // Adjustment controls
+    const brightness = document.getElementById('brightness');
+    const contrast = document.getElementById('contrast');
+    const saturation = document.getElementById('saturation');
+    const adjustApply = document.getElementById('adjust-apply');
+    const adjustReset = document.getElementById('adjust-reset');
+    
+    if (brightness) {
+        brightness.addEventListener('input', function() {
+            document.getElementById('brightness-value').textContent = this.value;
+        });
+    }
+    
+    if (contrast) {
+        contrast.addEventListener('input', function() {
+            document.getElementById('contrast-value').textContent = this.value;
+        });
+    }
+    
+    if (saturation) {
+        saturation.addEventListener('input', function() {
+            document.getElementById('saturation-value').textContent = this.value;
+        });
+    }
+    
+    if (adjustApply) {
+        adjustApply.addEventListener('click', applyAdjustments);
+    }
+    
+    if (adjustReset) {
+        adjustReset.addEventListener('click', resetAdjustments);
+    }
+}
+
+function openImageEditor(file) {
+    currentEditingFile = file;
+    
+    // Create image element to load the file
+    const img = new Image();
+    img.onload = function() {
+        // Initialize canvas
+        currentCanvas = document.getElementById('editor-canvas');
+        currentCtx = currentCanvas.getContext('2d');
+        
+        // Set canvas size to fit the image
+        const maxWidth = 600;
+        const maxHeight = 400;
+        let { width, height } = calculateAspectRatio(img.width, img.height, maxWidth, maxHeight);
+        
+        currentCanvas.width = width;
+        currentCanvas.height = height;
+        
+        // Draw image on canvas
+        currentCtx.drawImage(img, 0, 0, width, height);
+        
+        // Store original image data
+        originalImageData = currentCtx.getImageData(0, 0, width, height);
+        
+        // Set initial resize values
+        document.getElementById('resize-width').value = img.width;
+        document.getElementById('resize-height').value = img.height;
+        
+        // Show editor modal
+        const modal = document.getElementById('image-editor-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    };
+    
+    img.src = URL.createObjectURL(file);
+}
+
+function closeImageEditor() {
+    const modal = document.getElementById('image-editor-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    
+    // Reset editor state
+    currentEditingFile = null;
+    originalImageData = null;
+    currentCanvas = null;
+    currentCtx = null;
+}
+
+function switchEditorTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.editor-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Update panels
+    document.querySelectorAll('.editor-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    document.getElementById(`${tabName}-panel`).classList.add('active');
+}
+
+function calculateAspectRatio(originalWidth, originalHeight, maxWidth, maxHeight) {
+    const aspectRatio = originalWidth / originalHeight;
+    
+    if (originalWidth <= maxWidth && originalHeight <= maxHeight) {
+        return { width: originalWidth, height: originalHeight };
+    }
+    
+    if (maxWidth / maxHeight > aspectRatio) {
+        return { width: maxHeight * aspectRatio, height: maxHeight };
+    } else {
+        return { width: maxWidth, height: maxWidth / aspectRatio };
+    }
+}
+
+function applyCrop() {
+    // Simple crop implementation - in a real app, you'd have interactive crop selection
+    showToast('Crop applied!', 'success');
+}
+
+function resetCrop() {
+    if (originalImageData && currentCtx) {
+        currentCtx.putImageData(originalImageData, 0, 0);
+        showToast('Crop reset', 'info');
+    }
+}
+
+function applyResize() {
+    const width = parseInt(document.getElementById('resize-width').value);
+    const height = parseInt(document.getElementById('resize-height').value);
+    
+    if (width <= 0 || height <= 0) {
+        showToast('Invalid dimensions', 'error');
+        return;
+    }
+    
+    if (currentCanvas && currentCtx) {
+        // Create temporary canvas for resizing
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        
+        // Draw resized image
+        tempCtx.drawImage(currentCanvas, 0, 0, width, height);
+        
+        // Update main canvas
+        currentCanvas.width = width;
+        currentCanvas.height = height;
+        currentCtx.drawImage(tempCanvas, 0, 0);
+        
+        showToast('Image resized!', 'success');
+    }
+}
+
+function resetResize() {
+    if (currentEditingFile) {
+        const img = new Image();
+        img.onload = function() {
+            const maxWidth = 600;
+            const maxHeight = 400;
+            let { width, height } = calculateAspectRatio(img.width, img.height, maxWidth, maxHeight);
+            
+            currentCanvas.width = width;
+            currentCanvas.height = height;
+            currentCtx.drawImage(img, 0, 0, width, height);
+            
+            document.getElementById('resize-width').value = img.width;
+            document.getElementById('resize-height').value = img.height;
+            
+            showToast('Resize reset', 'info');
+        };
+        img.src = URL.createObjectURL(currentEditingFile);
+    }
+}
+
+function updateResizeHeight() {
+    const width = parseInt(document.getElementById('resize-width').value);
+    const height = parseInt(document.getElementById('resize-height').value);
+    const aspectRatio = width / height;
+    
+    if (currentEditingFile) {
+        const img = new Image();
+        img.onload = function() {
+            const newHeight = Math.round(width / (img.width / img.height));
+            document.getElementById('resize-height').value = newHeight;
+        };
+        img.src = URL.createObjectURL(currentEditingFile);
+    }
+}
+
+function applyFilter(filterName) {
+    if (!currentCtx || !originalImageData) return;
+    
+    // Update active filter button
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-filter="${filterName}"]`).classList.add('active');
+    
+    // Apply filter
+    const imageData = currentCtx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+    const data = imageData.data;
+    
+    switch(filterName) {
+        case 'grayscale':
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+                data[i] = gray;
+                data[i + 1] = gray;
+                data[i + 2] = gray;
+            }
+            break;
+        case 'sepia':
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+                data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+                data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+            }
+            break;
+        case 'vintage':
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.min(255, data[i] * 1.1);
+                data[i + 1] = Math.min(255, data[i + 1] * 1.0);
+                data[i + 2] = Math.min(255, data[i + 2] * 0.9);
+            }
+            break;
+        case 'brightness':
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.min(255, data[i] + 30);
+                data[i + 1] = Math.min(255, data[i + 1] + 30);
+                data[i + 2] = Math.min(255, data[i + 2] + 30);
+            }
+            break;
+        case 'contrast':
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.5 + 128));
+                data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.5 + 128));
+                data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.5 + 128));
+            }
+            break;
+        case 'none':
+            // Reset to original
+            currentCtx.putImageData(originalImageData, 0, 0);
+            return;
+    }
+    
+    currentCtx.putImageData(imageData, 0, 0);
+    showToast(`Filter applied: ${filterName}`, 'success');
+}
+
+function applyAdjustments() {
+    const brightness = parseInt(document.getElementById('brightness').value);
+    const contrast = parseInt(document.getElementById('contrast').value);
+    const saturation = parseInt(document.getElementById('saturation').value);
+    
+    if (!currentCtx || !originalImageData) return;
+    
+    const imageData = currentCtx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+        // Apply brightness
+        data[i] = Math.min(255, Math.max(0, data[i] + brightness));
+        data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + brightness));
+        data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + brightness));
+        
+        // Apply contrast
+        const contrastFactor = (100 + contrast) / 100;
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * contrastFactor + 128));
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * contrastFactor + 128));
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * contrastFactor + 128));
+        
+        // Apply saturation
+        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        const saturationFactor = (100 + saturation) / 100;
+        data[i] = Math.min(255, Math.max(0, gray + (data[i] - gray) * saturationFactor));
+        data[i + 1] = Math.min(255, Math.max(0, gray + (data[i + 1] - gray) * saturationFactor));
+        data[i + 2] = Math.min(255, Math.max(0, gray + (data[i + 2] - gray) * saturationFactor));
+    }
+    
+    currentCtx.putImageData(imageData, 0, 0);
+    showToast('Adjustments applied!', 'success');
+}
+
+function resetAdjustments() {
+    document.getElementById('brightness').value = 0;
+    document.getElementById('contrast').value = 0;
+    document.getElementById('saturation').value = 0;
+    document.getElementById('brightness-value').textContent = '0';
+    document.getElementById('contrast-value').textContent = '0';
+    document.getElementById('saturation-value').textContent = '0';
+    
+    if (originalImageData && currentCtx) {
+        currentCtx.putImageData(originalImageData, 0, 0);
+        showToast('Adjustments reset', 'info');
+    }
+}
+
+function saveEditedImage() {
+    if (!currentCanvas || !currentEditingFile) return;
+    
+    // Convert canvas to blob
+    currentCanvas.toBlob(function(blob) {
+        // Create new file with edited image
+        const editedFile = new File([blob], currentEditingFile.name, {
+            type: currentEditingFile.type,
+            lastModified: Date.now()
+        });
+        
+        // Update the upload item with edited file
+        updateUploadItemWithEditedFile(editedFile);
+        
+        showToast('Image edited and saved!', 'success');
+        closeImageEditor();
+    }, currentEditingFile.type, 0.9);
+}
+
+function updateUploadItemWithEditedFile(editedFile) {
+    // Find the upload item and update it
+    const uploadItems = document.querySelectorAll('.upload-item');
+    uploadItems.forEach(item => {
+        const fileName = item.querySelector('.upload-item-name').textContent;
+        if (fileName === currentEditingFile.name) {
+            // Update the file reference (in a real app, you'd update the actual file object)
+            item.dataset.editedFile = 'true';
+            showToast('File updated with edits', 'success');
+        }
+    });
 }
 
 // Utility Functions

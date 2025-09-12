@@ -1,0 +1,17 @@
+apiVersion: v2
+name: clonegallery
+description: A modern image gallery with AI-powered generation
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+keywords:
+  - gallery
+  - images
+  - ai
+  - machine-learning
+home: https://github.com/your-org/clonegallery
+sources:
+  - https://github.com/your-org/clonegallery
+maintainers:
+  - name: CloneGallery Team
+    email: team@clonegallery.com

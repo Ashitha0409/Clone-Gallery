@@ -1,0 +1,201 @@
+# Default values for clonegallery
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "standard"
+
+# Image configuration
+images:
+  web:
+    repository: clonegallery-web
+    tag: latest
+    pullPolicy: IfNotPresent
+  api:
+    repository: clonegallery-api
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# Web service configuration
+web:
+  replicaCount: 3
+  image:
+    repository: clonegallery-web
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# API service configuration
+api:
+  replicaCount: 2
+  image:
+    repository: clonegallery-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  auth:
+    postgresPassword: "clonegallery"
+    database: "clonegallery"
+    username: "clonegallery"
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: ""
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+# Redis configuration
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClass: ""
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: clonegallery.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+  tls:
+    - secretName: clonegallery-tls
+      hosts:
+        - clonegallery.example.com
+
+# Configuration
+config:
+  # Database
+  dbType: "postgresql"
+  postgresHost: "postgresql"
+  postgresPort: "5432"
+  postgresDb: "clonegallery"
+  postgresUser: "clonegallery"
+  
+  # Redis
+  redisHost: "redis-master"
+  redisPort: "6379"
+  
+  # AI Provider
+  aiProvider: "replicate"  # "local", "replicate", "openai"
+  
+  # Storage
+  storageType: "s3"  # "local", "s3", "minio"
+  s3Bucket: "clonegallery-images"
+  s3ThumbnailBucket: "clonegallery-thumbnails"
+  awsRegion: "us-east-1"
+  
+  # JWT
+  jwtSecret: "your-production-secret-key-change-this"
+  jwtAlgorithm: "HS256"
+
+# Secrets (should be set via --set or values file)
+secrets:
+  postgresPassword: "clonegallery"
+  jwtSecret: "your-production-secret-key-change-this"
+  replicateApiToken: ""
+  openaiApiKey: ""
+  awsAccessKeyId: ""
+  awsSecretAccessKey: ""
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 2000
+
+# Security context
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
