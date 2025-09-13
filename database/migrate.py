@@ -70,13 +70,9 @@ class DatabaseMigrator:
         
         conn = self.get_connection()
         try:
-            # Split by semicolon and execute each statement
-            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
-            
-            for statement in statements:
-                if statement:
-                    conn.execute(statement)
-            
+            # Execute the entire SQL content as one statement
+            # This handles triggers and other complex SQL structures
+            conn.executescript(sql_content)
             conn.commit()
             print(f"✅ Migration {version} completed successfully")
             

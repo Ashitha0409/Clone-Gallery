@@ -267,43 +267,82 @@ function hideMainApp() {
 }
 
 // Authentication
-function handleLogin(email, password) {
-    const user = appData.users.find(u => u.email === email);
-    
-    if (user) {
-        currentUser = user;
-        hideLoginScreen();
-        showMainApp();
-        initializeUserSession();
-        showToast('Login successful!', 'success');
-        return true;
-    } else {
-        showToast('Invalid credentials', 'error');
+async function handleLogin(email, password) {
+    try {
+        const response = await apiService.login(email, password);
+        
+        if (response.access_token) {
+            // Get user info
+            const userInfo = await apiService.getCurrentUser();
+            currentUser = userInfo;
+            
+            hideLoginScreen();
+            showMainApp();
+            initializeUserSession();
+            showToast('Login successful!', 'success');
+            return true;
+        } else {
+            showToast('Invalid credentials', 'error');
+            return false;
+        }
+    } catch (error) {
+        console.error('Login failed:', error);
+        showToast('Login failed: ' + error.message, 'error');
         return false;
     }
 }
 
-function handleDemoLogin(role) {
-    let demoUser;
-    
-    switch(role) {
-        case 'admin':
-            demoUser = appData.users.find(u => u.role === 'Admin');
-            break;
-        case 'editor':
-            demoUser = appData.users.find(u => u.role === 'Editor');
-            break;
-        case 'visitor':
-            demoUser = appData.users.find(u => u.role === 'Visitor');
-            break;
+async function handleRegister(userData) {
+    try {
+        const response = await apiService.register(userData);
+        
+        if (response.access_token) {
+            // Get user info
+            const userInfo = await apiService.getCurrentUser();
+            currentUser = userInfo;
+            
+            hideLoginScreen();
+            showMainApp();
+            initializeUserSession();
+            showToast('Account created successfully!', 'success');
+            return true;
+        } else {
+            showToast('Registration failed', 'error');
+            return false;
+        }
+    } catch (error) {
+        console.error('Registration failed:', error);
+        showToast('Registration failed: ' + error.message, 'error');
+        return false;
     }
-    
-    if (demoUser) {
-        currentUser = demoUser;
-        hideLoginScreen();
-        showMainApp();
-        initializeUserSession();
-        showToast(`Logged in as ${demoUser.role}`, 'success');
+}
+
+async function handleDemoLogin(role) {
+    try {
+        // Use demo credentials based on role
+        let email, password;
+        switch(role) {
+            case 'admin':
+                email = 'admin@clonegallery.local';
+                password = 'admin123';
+                break;
+            case 'editor':
+                email = 'editor@clonegallery.local';
+                password = 'editor123';
+                break;
+            case 'visitor':
+                email = 'user@clonegallery.local';
+                password = 'user123';
+                break;
+        }
+        
+        const success = await handleLogin(email, password);
+        if (success) {
+            showToast(`Logged in as ${currentUser.role}`, 'success');
+        }
+    } catch (error) {
+        console.error('Demo login failed:', error);
+        showToast('Demo login failed', 'error');
     }
 }
 
@@ -346,6 +385,7 @@ function setupRoleBasedFeatures() {
 }
 
 function handleLogout() {
+    apiService.clearToken();
     currentUser = null;
     document.body.className = '';
     hideMainApp();
@@ -365,6 +405,70 @@ function setupEventListeners() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             handleLogin(email, password);
+        });
+    }
+    
+    // Register form
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        registerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value;
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const confirmPassword = document.getElementById('reg-confirm-password').value;
+            
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                showToast('Passwords do not match', 'error');
+                return;
+            }
+            
+            // Validate password length
+            if (password.length < 8) {
+                showToast('Password must be at least 8 characters long', 'error');
+                return;
+            }
+            
+            const userData = {
+                name: name,
+                username: username,
+                email: email,
+                password: password,
+                role: 'Visitor'
+            };
+            
+            handleRegister(userData);
+        });
+    }
+    
+    // Auth mode toggle
+    const authModeSwitch = document.getElementById('auth-mode-switch');
+    const authModeText = document.getElementById('auth-mode-text');
+    const authTitle = document.getElementById('auth-title');
+    const loginFormEl = document.getElementById('login-form');
+    const registerFormEl = document.getElementById('register-form');
+    
+    if (authModeSwitch) {
+        authModeSwitch.addEventListener('click', function() {
+            const isLoginMode = !loginFormEl.classList.contains('hidden');
+            
+            if (isLoginMode) {
+                // Switch to register mode
+                loginFormEl.classList.add('hidden');
+                registerFormEl.classList.remove('hidden');
+                authTitle.textContent = 'Create Account';
+                authModeText.textContent = 'Already have an account?';
+                this.textContent = 'Sign In';
+            } else {
+                // Switch to login mode
+                registerFormEl.classList.add('hidden');
+                loginFormEl.classList.remove('hidden');
+                authTitle.textContent = 'Sign In';
+                authModeText.textContent = 'Don\'t have an account?';
+                this.textContent = 'Create Account';
+            }
         });
     }
     
@@ -483,92 +587,159 @@ function navigateToPage(pageId) {
 }
 
 // Dashboard Functions
-function updateDashboardStats() {
-    const totalImages = document.getElementById('total-images');
-    const totalViews = document.getElementById('total-views');
-    const totalLikes = document.getElementById('total-likes');
-    const storageUsed = document.getElementById('storage-used');
-    
-    if (totalImages) totalImages.textContent = appData.analytics.total_images.toLocaleString();
-    if (totalViews) totalViews.textContent = appData.analytics.total_views.toLocaleString();
-    if (totalLikes) totalLikes.textContent = appData.analytics.total_likes.toLocaleString();
-    if (storageUsed) storageUsed.textContent = appData.analytics.storage_used;
-}
-
-function loadRecentImages() {
-    const recentImages = [...appData.images]
-        .sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at))
-        .slice(0, 6);
-    
-    const container = document.getElementById('recent-images');
-    if (container) {
-        container.innerHTML = recentImages.map(image => createImageCard(image, true)).join('');
+async function updateDashboardStats() {
+    try {
+        // Get user's images to calculate stats
+        const userImages = await apiService.getUserImages(currentUser.id, 1, 1000);
         
-        // Add click handlers
-        container.querySelectorAll('.image-card').forEach(card => {
-            card.addEventListener('click', function() {
-                openImageModal(this.dataset.imageId);
-            });
-        });
+        const totalImages = userImages.total || 0;
+        const totalViews = userImages.images.reduce((sum, img) => sum + img.views, 0);
+        const totalLikes = 0; // TODO: Implement likes system
+        const storageUsed = userImages.images.reduce((sum, img) => sum + (img.size_bytes || 0), 0);
+        
+        const totalImagesEl = document.getElementById('total-images');
+        const totalViewsEl = document.getElementById('total-views');
+        const totalLikesEl = document.getElementById('total-likes');
+        const storageUsedEl = document.getElementById('storage-used');
+        
+        if (totalImagesEl) totalImagesEl.textContent = totalImages.toLocaleString();
+        if (totalViewsEl) totalViewsEl.textContent = totalViews.toLocaleString();
+        if (totalLikesEl) totalLikesEl.textContent = totalLikes.toLocaleString();
+        if (storageUsedEl) storageUsedEl.textContent = formatBytes(storageUsed);
+    } catch (error) {
+        console.error('Failed to update dashboard stats:', error);
+        // Fallback to static values
+        const totalImages = document.getElementById('total-images');
+        const totalViews = document.getElementById('total-views');
+        const totalLikes = document.getElementById('total-likes');
+        const storageUsed = document.getElementById('storage-used');
+        
+        if (totalImages) totalImages.textContent = '0';
+        if (totalViews) totalViews.textContent = '0';
+        if (totalLikes) totalLikes.textContent = '0';
+        if (storageUsed) storageUsed.textContent = '0 B';
     }
 }
 
-function loadPopularImages() {
-    const popularImages = [...appData.images]
-        .sort((a, b) => (b.likes + b.views) - (a.likes + a.views))
-        .slice(0, 6);
-    
-    const container = document.getElementById('popular-images');
-    if (container) {
-        container.innerHTML = popularImages.map(image => createImageCard(image, true)).join('');
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function loadRecentImages() {
+    try {
+        const userImages = await apiService.getUserImages(currentUser.id, 1, 6);
+        const recentImages = userImages.images || [];
         
-        // Add click handlers
-        container.querySelectorAll('.image-card').forEach(card => {
-            card.addEventListener('click', function() {
-                openImageModal(this.dataset.imageId);
-            });
-        });
+        const container = document.getElementById('recent-images');
+        if (container) {
+            if (recentImages.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary);">No images uploaded yet</p>';
+            } else {
+                container.innerHTML = recentImages.map(image => createImageCard(image, true)).join('');
+                
+                // Add click handlers
+                container.querySelectorAll('.image-card').forEach(card => {
+                    card.addEventListener('click', function() {
+                        openImageModal(this.dataset.imageId);
+                    });
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load recent images:', error);
+        const container = document.getElementById('recent-images');
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary);">Failed to load images</p>';
+        }
+    }
+}
+
+async function loadPopularImages() {
+    try {
+        const allImages = await apiService.getImages(1, 100);
+        const popularImages = allImages.images
+            .sort((a, b) => b.views - a.views)
+            .slice(0, 6);
+        
+        const container = document.getElementById('popular-images');
+        if (container) {
+            if (popularImages.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary);">No images available</p>';
+            } else {
+                container.innerHTML = popularImages.map(image => createImageCard(image, true)).join('');
+                
+                // Add click handlers
+                container.querySelectorAll('.image-card').forEach(card => {
+                    card.addEventListener('click', function() {
+                        openImageModal(this.dataset.imageId);
+                    });
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load popular images:', error);
+        const container = document.getElementById('popular-images');
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary);">Failed to load images</p>';
+        }
     }
 }
 
 // Gallery Functions
-function loadGalleryImages(filters = {}) {
-    let images = [...appData.images];
-    
-    // Apply filters
-    if (filters.tags && filters.tags.length > 0) {
-        images = images.filter(img => 
-            filters.tags.some(tag => img.tags.includes(tag))
-        );
-    }
-    
-    if (filters.sort) {
-        switch(filters.sort) {
-            case 'newest':
-                images.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
-                break;
-            case 'oldest':
-                images.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
-                break;
-            case 'popular':
-                images.sort((a, b) => b.likes - a.likes);
-                break;
-            case 'views':
-                images.sort((a, b) => b.views - a.views);
-                break;
-        }
-    }
-    
-    const container = document.getElementById('gallery-container');
-    if (container) {
-        container.innerHTML = images.map(image => createImageCard(image)).join('');
+async function loadGalleryImages(filters = {}) {
+    try {
+        const response = await apiService.getImages(1, 100);
+        let images = response.images || [];
         
-        // Add click handlers
-        container.querySelectorAll('.image-card').forEach(card => {
-            card.addEventListener('click', function() {
-                openImageModal(this.dataset.imageId);
-            });
-        });
+        // Apply filters
+        if (filters.tags && filters.tags.length > 0) {
+            images = images.filter(img => 
+                filters.tags.some(tag => img.tags.includes(tag))
+            );
+        }
+        
+        if (filters.sort) {
+            switch(filters.sort) {
+                case 'newest':
+                    images.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+                    break;
+                case 'oldest':
+                    images.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
+                    break;
+                case 'popular':
+                    images.sort((a, b) => b.views - a.views);
+                    break;
+                case 'views':
+                    images.sort((a, b) => b.views - a.views);
+                    break;
+            }
+        }
+        
+        const container = document.getElementById('gallery-container');
+        if (container) {
+            if (images.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary); padding: var(--space-32);">No images found</p>';
+            } else {
+                container.innerHTML = images.map(image => createImageCard(image)).join('');
+                
+                // Add click handlers
+                container.querySelectorAll('.image-card').forEach(card => {
+                    card.addEventListener('click', function() {
+                        openImageModal(this.dataset.imageId);
+                    });
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load gallery images:', error);
+        const container = document.getElementById('gallery-container');
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: var(--color-text-secondary); padding: var(--space-32);">Failed to load images</p>';
+        }
     }
 }
 
@@ -633,26 +804,24 @@ function setupGalleryHandlers() {
 
 // Image Card Creation
 function createImageCard(image, compact = false) {
-    const uploader = appData.users.find(u => u.id === image.uploader);
     const uploadDate = new Date(image.uploaded_at).toLocaleDateString();
     
     return `
         <div class="image-card" data-image-id="${image.id}">
-            <img src="${image.thumbnail}" alt="${image.alt_text}" loading="lazy">
+            <img src="${image.thumbnail}" alt="${image.alt_text || image.title}" loading="lazy">
             <div class="image-card-content">
                 <h3 class="image-card-title">${image.title}</h3>
-                ${!compact ? `<p class="image-card-caption">${image.caption.substring(0, 80)}...</p>` : ''}
+                ${!compact ? `<p class="image-card-caption">${(image.caption || '').substring(0, 80)}${(image.caption || '').length > 80 ? '...' : ''}</p>` : ''}
                 <div class="image-card-meta">
-                    <span>By ${uploader ? uploader.name : 'Unknown'}</span>
+                    <span>By ${image.uploader_id}</span>
                     <span>${uploadDate}</span>
                 </div>
                 <div class="image-stats">
-                    <span><i class="fas fa-heart"></i> ${image.likes}</span>
                     <span><i class="fas fa-eye"></i> ${image.views}</span>
                 </div>
                 ${image.is_ai_generated ? '<div class="ai-badge"><i class="fas fa-robot"></i> AI Generated</div>' : ''}
                 <div class="image-tags">
-                    ${image.tags.slice(0, 3).map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    ${(image.tags || []).slice(0, 3).map(tag => `<span class="tag">${tag}</span>`).join('')}
                 </div>
             </div>
         </div>
@@ -779,42 +948,68 @@ function createUploadItem(file) {
     
     queue.appendChild(uploadItem);
     
-    // Start upload simulation
-    setTimeout(() => simulateUploadProgress(itemId), 100);
+    // Start real upload
+    setTimeout(() => uploadImageToAPI(itemId, file), 100);
 }
 
-function simulateUploadProgress(itemId) {
+async function uploadImageToAPI(itemId, file) {
     const progressBar = document.querySelector(`#${itemId} .upload-progress-bar`);
     const status = document.querySelector(`#${itemId} .status`);
     
     if (!progressBar || !status) return;
     
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress >= 100) {
-            progress = 100;
-            clearInterval(interval);
-            
-            setTimeout(() => {
-                simulateProcessing(itemId);
-            }, 500);
+    try {
+        // Get metadata from form
+        const titleInput = document.querySelector(`#${itemId} input[type="text"]`);
+        const captionInput = document.querySelector(`#${itemId} textarea`);
+        const tagsInput = document.querySelector(`#${itemId} input[placeholder*="tags"]`);
+        const privacySelect = document.querySelector(`#${itemId} select`);
+        
+        const metadata = {
+            title: titleInput ? titleInput.value : file.name.replace(/\.[^/.]+$/, ''),
+            caption: captionInput ? captionInput.value : '',
+            alt_text: '',
+            privacy: privacySelect ? privacySelect.value : 'public',
+            tags: tagsInput ? tagsInput.value.split(',').map(tag => tag.trim()).filter(tag => tag) : []
+        };
+        
+        // Simulate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 10;
+            if (progress >= 90) {
+                progress = 90;
+                clearInterval(progressInterval);
+            }
+            progressBar.style.width = progress + '%';
+        }, 100);
+        
+        status.textContent = 'Uploading...';
+        
+        // Upload to API
+        const uploadedImage = await apiService.uploadImage(file, metadata);
+        
+        // Complete progress
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        status.textContent = 'Complete!';
+        status.style.color = 'var(--color-success)';
+        
+        showToast('Image uploaded successfully!', 'success');
+        
+        // Refresh dashboard and gallery if on those pages
+        if (currentPage === 'dashboard') {
+            await updateDashboardStats();
+            await loadRecentImages();
+        } else if (currentPage === 'gallery') {
+            await loadGalleryImages();
         }
         
-        progressBar.style.width = progress + '%';
-    }, 200);
-}
-
-function simulateProcessing(itemId) {
-    const status = document.querySelector(`#${itemId} .status`);
-    if (status) {
-        status.textContent = 'Processing...';
-        
-        setTimeout(() => {
-            status.textContent = 'Complete!';
-            status.style.color = 'var(--color-success)';
-            showToast('Image uploaded successfully!', 'success');
-        }, 2000);
+    } catch (error) {
+        console.error('Upload failed:', error);
+        status.textContent = 'Failed!';
+        status.style.color = 'var(--color-error)';
+        showToast('Upload failed: ' + error.message, 'error');
     }
 }
 
@@ -1220,29 +1415,16 @@ async function simulateAIGeneration(prompt, model, steps, guidance) {
     
     try {
         // Call the actual AI generation API
-        const response = await fetch('/api/generate/image', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                prompt: prompt,
-                width: 512,
-                height: 512,
-                num_inference_steps: parseInt(steps),
-                guidance_scale: parseFloat(guidance),
-                seed: Math.floor(Math.random() * 1000000)
-            })
+        const response = await apiService.generateImage(prompt, {
+            width: 512,
+            height: 512,
+            steps: parseInt(steps),
+            guidance: parseFloat(guidance),
+            model: model
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
         // Show the generated image
-        showGenerationResult(prompt, model, data.image);
+        showGenerationResult(prompt, model, response.image_url);
         
     } catch (error) {
         console.error('AI generation failed:', error);
@@ -1312,53 +1494,41 @@ function showGenerationResult(prompt, model, generatedImageUrl = null) {
     showToast('Image generated successfully!', 'success');
 }
 
-function saveGeneratedImage(imageUrl, prompt, model) {
-    // Create a new image entry in the gallery
-    const newImage = {
-        id: 'generated-' + Date.now(),
-        title: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
-        caption: `AI Generated: ${prompt}`,
-        alt_text: `AI generated image: ${prompt}`,
-        url: imageUrl,
-        thumbnail: imageUrl,
-        uploader: currentUser ? currentUser.id : 'admin-001',
-        uploaded_at: new Date().toISOString(),
-        tags: ['AI', 'generated', 'artificial-intelligence'],
-        privacy: 'public',
-        likes: 0,
-        views: 0,
-        is_ai_generated: true,
-        generation_meta: {
-            model: model,
-            prompt: prompt,
-            steps: 25,
-            guidance: 7.5
-        },
-        width: 512,
-        height: 512,
-        size: '2.1 MB',
-        format: 'PNG'
-    };
-    
-    // Add to app data
-    appData.images.unshift(newImage);
-    
-    // Update analytics
-    appData.analytics.ai_generated++;
-    appData.analytics.total_images++;
-    
-    // Refresh gallery if on gallery page
-    if (currentPage === 'gallery') {
-        loadGalleryImages();
+async function saveGeneratedImage(imageUrl, prompt, model) {
+    try {
+        // Convert base64 data URL to blob
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const file = new File([blob], `generated-${Date.now()}.png`, { type: 'image/png' });
+        
+        // Upload the generated image
+        const metadata = {
+            title: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
+            caption: `AI Generated: ${prompt}`,
+            alt_text: `AI generated image: ${prompt}`,
+            privacy: 'public',
+            tags: ['AI', 'generated', 'artificial-intelligence']
+        };
+        
+        const uploadedImage = await apiService.uploadImage(file, metadata);
+        
+        // Refresh gallery if on gallery page
+        if (currentPage === 'gallery') {
+            await loadGalleryImages();
+        }
+        
+        // Refresh dashboard if on dashboard page
+        if (currentPage === 'dashboard') {
+            await loadRecentImages();
+            await updateDashboardStats();
+        }
+        
+        showToast('Generated image saved to gallery!', 'success');
+        
+    } catch (error) {
+        console.error('Failed to save generated image:', error);
+        showToast('Failed to save generated image', 'error');
     }
-    
-    // Refresh dashboard if on dashboard page
-    if (currentPage === 'dashboard') {
-        loadRecentImages();
-        updateDashboardStats();
-    }
-    
-    showToast('Generated image saved to gallery!', 'success');
 }
 
 function downloadGeneratedImage(imageUrl, prompt) {
@@ -1452,65 +1622,56 @@ function setupModalHandlers() {
     }
 }
 
-function openImageModal(imageId) {
-    const image = appData.images.find(img => img.id === imageId);
-    if (!image) return;
-    
-    const uploader = appData.users.find(u => u.id === image.uploader);
-    
-    // Update modal content
-    const modalImage = document.getElementById('modal-image');
-    const modalTitle = document.getElementById('modal-title');
-    const modalCaption = document.getElementById('modal-caption');
-    const modalUploader = document.getElementById('modal-uploader');
-    const modalDate = document.getElementById('modal-date');
-    const modalSize = document.getElementById('modal-size');
-    const modalViews = document.getElementById('modal-views');
-    
-    if (modalImage) {
-        modalImage.src = image.url;
-        modalImage.alt = image.alt_text;
-    }
-    if (modalTitle) modalTitle.textContent = image.title;
-    if (modalCaption) modalCaption.textContent = image.caption;
-    if (modalUploader) modalUploader.textContent = uploader ? uploader.name : 'Unknown';
-    if (modalDate) modalDate.textContent = new Date(image.uploaded_at).toLocaleDateString();
-    if (modalSize) modalSize.textContent = image.size;
-    if (modalViews) modalViews.textContent = image.views.toLocaleString();
-    
-    // Update tags
-    const tagsContainer = document.getElementById('modal-tags');
-    if (tagsContainer) {
-        tagsContainer.innerHTML = image.tags.map(tag => `<span class="tag">${tag}</span>`).join('');
-    }
-    
-    // Update like button
-    const likeBtn = document.getElementById('like-btn');
-    const likeCount = document.getElementById('like-count');
-    if (likeBtn) {
-        likeBtn.dataset.imageId = imageId;
-        const likeKey = `${currentUser.id}-${imageId}`;
-        const isLiked = appData.userLikes.has(likeKey);
+async function openImageModal(imageId) {
+    try {
+        const image = await apiService.getImage(imageId);
         
-        if (isLiked) {
-            likeBtn.classList.add('liked');
-            likeBtn.innerHTML = '<i class="fas fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
-        } else {
-            likeBtn.classList.remove('liked');
-            likeBtn.innerHTML = '<i class="far fa-heart"></i> <span id="like-count">' + image.likes + '</span>';
+        // Update modal content
+        const modalImage = document.getElementById('modal-image');
+        const modalTitle = document.getElementById('modal-title');
+        const modalCaption = document.getElementById('modal-caption');
+        const modalUploader = document.getElementById('modal-uploader');
+        const modalDate = document.getElementById('modal-date');
+        const modalSize = document.getElementById('modal-size');
+        const modalViews = document.getElementById('modal-views');
+        
+        if (modalImage) {
+            modalImage.src = image.url;
+            modalImage.alt = image.alt_text || image.title;
         }
+        if (modalTitle) modalTitle.textContent = image.title;
+        if (modalCaption) modalCaption.textContent = image.caption || '';
+        if (modalUploader) modalUploader.textContent = image.uploader_id;
+        if (modalDate) modalDate.textContent = new Date(image.uploaded_at).toLocaleDateString();
+        if (modalSize) modalSize.textContent = formatBytes(image.size_bytes || 0);
+        if (modalViews) modalViews.textContent = image.views.toLocaleString();
+        
+        // Update tags
+        const tagsContainer = document.getElementById('modal-tags');
+        if (tagsContainer) {
+            tagsContainer.innerHTML = (image.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('');
+        }
+        
+        // Update like button (placeholder for now)
+        const likeBtn = document.getElementById('like-btn');
+        const likeCount = document.getElementById('like-count');
+        if (likeBtn) {
+            likeBtn.dataset.imageId = imageId;
+            likeBtn.classList.remove('liked');
+            likeBtn.innerHTML = '<i class="far fa-heart"></i> <span id="like-count">0</span>';
+        }
+        if (likeCount) likeCount.textContent = '0';
+        
+        // Show modal
+        const modal = document.getElementById('image-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Failed to load image:', error);
+        showToast('Failed to load image details', 'error');
     }
-    if (likeCount) likeCount.textContent = image.likes;
-    
-    // Show modal
-    const modal = document.getElementById('image-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-    }
-    
-    // Increment view count
-    image.views++;
-    if (modalViews) modalViews.textContent = image.views.toLocaleString();
 }
 
 function closeImageModal() {

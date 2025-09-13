@@ -59,8 +59,10 @@ def populate_sample_data(cursor):
         {
             'id': 'admin-001',
             'email': 'admin@clonegallery.local',
+            'username': 'admin',
             'name': 'Gallery Admin',
             'role': 'Admin',
+            'password': 'admin123',
             'avatar': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
             'joined': '2024-01-15T00:00:00Z',
             'uploads': 45,
@@ -69,8 +71,10 @@ def populate_sample_data(cursor):
         {
             'id': 'editor-001',
             'email': 'editor@clonegallery.local',
+            'username': 'editor',
             'name': 'Creative Editor',
             'role': 'Editor',
+            'password': 'editor123',
             'avatar': 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
             'joined': '2024-02-20T00:00:00Z',
             'uploads': 28,
@@ -79,8 +83,10 @@ def populate_sample_data(cursor):
         {
             'id': 'visitor-001',
             'email': 'user@clonegallery.local',
+            'username': 'visitor',
             'name': 'Gallery Visitor',
             'role': 'Visitor',
+            'password': 'user123',
             'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
             'joined': '2024-03-10T00:00:00Z',
             'uploads': 0,
@@ -88,13 +94,20 @@ def populate_sample_data(cursor):
         }
     ]
     
+    # Import password hashing library
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
     # Insert users
     for user in users:
+        # Hash the password
+        password_hash = pwd_context.hash(user['password'])
+        
         cursor.execute("""
-            INSERT INTO users (id, email, name, role, avatar, joined_at, uploads, views)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, email, username, password_hash, name, role, avatar, joined_at, uploads, views)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            user['id'], user['email'], user['name'], user['role'],
+            user['id'], user['email'], user['username'], password_hash, user['name'], user['role'],
             user['avatar'], user['joined'], user['uploads'], user['views']
         ))
     

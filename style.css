@@ -869,6 +869,24 @@ select.form-control {
     justify-content: center;
 }
 
+/* Auth Mode Toggle */
+.auth-mode-toggle {
+    margin-top: var(--space-24);
+    padding-top: var(--space-24);
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+}
+
+.auth-mode-toggle p {
+    margin: 0 0 var(--space-12) 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.auth-mode-toggle .btn {
+    margin: 0;
+}
+
 /* Main Layout */
 .navbar {
     position: fixed;

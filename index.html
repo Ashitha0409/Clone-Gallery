@@ -32,7 +32,9 @@
             </div>
             
             <div class="auth-form">
-                <h2>Sign In</h2>
+                <h2 id="auth-title">Sign In</h2>
+                
+                <!-- Login Form -->
                 <form id="login-form">
                     <div class="form-group">
                         <label class="form-label" for="email">Email</label>
@@ -44,6 +46,37 @@
                     </div>
                     <button type="submit" class="btn btn--primary btn--full-width">Sign In</button>
                 </form>
+                
+                <!-- Register Form -->
+                <form id="register-form" class="hidden">
+                    <div class="form-group">
+                        <label class="form-label" for="reg-name">Full Name</label>
+                        <input type="text" id="reg-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="reg-username">Username</label>
+                        <input type="text" id="reg-username" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="reg-email">Email</label>
+                        <input type="email" id="reg-email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="reg-password">Password</label>
+                        <input type="password" id="reg-password" class="form-control" required minlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="reg-confirm-password">Confirm Password</label>
+                        <input type="password" id="reg-confirm-password" class="form-control" required minlength="8">
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Create Account</button>
+                </form>
+                
+                <!-- Auth Mode Toggle -->
+                <div class="auth-mode-toggle">
+                    <p id="auth-mode-text">Don't have an account?</p>
+                    <button type="button" class="btn btn--outline btn--sm" id="auth-mode-switch">Create Account</button>
+                </div>
                 
                 <div class="demo-accounts">
                     <h3>Demo Accounts</h3>
@@ -573,6 +606,7 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
+    <script src="api.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

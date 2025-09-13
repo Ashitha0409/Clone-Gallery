@@ -12,7 +12,7 @@ import json
 from typing import Optional, List, Union, Dict, Any
 import redis
 import torch
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Depends, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Depends, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PIL import Image
@@ -286,6 +286,41 @@ class DatabaseManager:
         
         user = self.execute_query(query, (user_id,), fetch_one=True)
         return dict(user) if user else None
+    
+    def execute(self, query: str, params: tuple = None):
+        """Execute a query and return cursor."""
+        if DB_TYPE == 'sqlite':
+            cursor = self.conn.cursor()
+            cursor.execute(query, params or ())
+            return cursor
+        else:  # PostgreSQL
+            cursor = self.conn.cursor()
+            cursor.execute(query, params)
+            return cursor
+    
+    def fetch_one(self, query: str, params: tuple = None):
+        """Fetch one row."""
+        return self.execute_query(query, params, fetch_one=True)
+    
+    def fetch_all(self, query: str, params: tuple = None):
+        """Fetch all rows."""
+        return self.execute_query(query, params, fetch_all=True)
+    
+    def commit(self):
+        """Commit the current transaction."""
+        self.conn.commit()
+    
+    def get_or_create_tag(self, tag_name: str) -> int:
+        """Get or create a tag and return its ID."""
+        # Try to get existing tag
+        tag = self.fetch_one("SELECT id FROM tags WHERE name = ?", (tag_name,))
+        if tag:
+            return tag['id']
+        
+        # Create new tag
+        cursor = self.execute("INSERT INTO tags (name) VALUES (?)", (tag_name,))
+        self.commit()
+        return cursor.lastrowid
 
 # JWT token management
 def create_access_token(user_id: str, role: str) -> str:
@@ -602,9 +637,255 @@ async def get_models_status():
         "clip_loaded": clip_model is not None,
         "diffusion_loaded": diffusion_pipeline is not None,
         "device": device,
-        "ai_provider": AI_PROVIDER,
-        "cuda_available": torch.cuda.is_available()
+        "ai_provider": AI_PROVIDER
     }
+
+# Image upload and management endpoints
+@app.post("/upload/image", response_model=ImageResponse)
+async def upload_image(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    caption: str = Form(""),
+    alt_text: str = Form(""),
+    privacy: PrivacyLevel = Form(PrivacyLevel.PUBLIC),
+    tags: str = Form(""),  # Comma-separated tags
+    current_user: Dict = Depends(get_current_user)
+):
+    """Upload an image file."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Validate file type
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        # Read file data
+        file_data = await file.read()
+        
+        # Upload to storage service
+        from storage_service import StorageService
+        storage = StorageService()
+        file_url, thumbnail_url = storage.upload_file(
+            file_data, file.filename, file.content_type
+        )
+        
+        # Parse tags
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+        
+        # Get image dimensions
+        from PIL import Image
+        import io
+        image = Image.open(io.BytesIO(file_data))
+        width, height = image.size
+        
+        # Save to database
+        db = DatabaseManager()
+        image_id = str(uuid.uuid4())
+        
+        # Insert image record
+        db.execute("""
+            INSERT INTO images (id, title, caption, alt_text, url, thumbnail, 
+                              uploader_id, privacy, width, height, size_bytes, 
+                              format, uploaded_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            image_id, title, caption, alt_text, file_url, thumbnail_url,
+            current_user['id'], privacy.value, width, height, len(file_data),
+            file.content_type.split('/')[1].upper(), datetime.now(timezone.utc)
+        ))
+        
+        # Insert tags
+        for tag_name in tag_list:
+            tag_id = db.get_or_create_tag(tag_name)
+            db.execute("""
+                INSERT OR IGNORE INTO image_tags (image_id, tag_id)
+                VALUES (?, ?)
+            """, (image_id, tag_id))
+        
+        # Update user upload count
+        db.execute("""
+            UPDATE users SET uploads = uploads + 1 WHERE id = ?
+        """, (current_user['id'],))
+        
+        db.commit()
+        
+        # Return image response
+        return ImageResponse(
+            id=image_id,
+            title=title,
+            caption=caption,
+            alt_text=alt_text,
+            url=file_url,
+            thumbnail=thumbnail_url,
+            uploader_id=current_user['id'],
+            uploaded_at=datetime.now(timezone.utc),
+            privacy=privacy,
+            views=0,
+            is_ai_generated=False,
+            width=width,
+            height=height,
+            size_bytes=len(file_data),
+            format=ImageFormat(file.content_type.split('/')[1].upper()),
+            tags=tag_list
+        )
+        
+    except Exception as e:
+        logger.error(f"Image upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Image upload failed")
+
+@app.get("/images", response_model=SearchResponse)
+async def get_images(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user_id: Optional[str] = Query(None),
+    privacy: Optional[PrivacyLevel] = Query(None),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get images with pagination and filtering."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        db = DatabaseManager()
+        
+        # Build query based on user role and filters
+        where_conditions = []
+        params = []
+        
+        # If user_id is specified, filter by that user
+        if user_id:
+            where_conditions.append("uploader_id = ?")
+            params.append(user_id)
+        
+        # If privacy filter is specified
+        if privacy:
+            where_conditions.append("privacy = ?")
+            params.append(privacy.value)
+        
+        # For non-admin users, only show public images or their own images
+        if current_user['role'] != 'Admin':
+            where_conditions.append("(privacy = 'public' OR uploader_id = ?)")
+            params.append(current_user['id'])
+        
+        where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        # Count total images
+        count_query = f"SELECT COUNT(*) as total FROM images {where_clause}"
+        total = db.fetch_one(count_query, params)['total']
+        
+        # Get images with pagination
+        offset = (page - 1) * limit
+        images_query = f"""
+            SELECT i.*, GROUP_CONCAT(t.name) as tag_names
+            FROM images i
+            LEFT JOIN image_tags it ON i.id = it.image_id
+            LEFT JOIN tags t ON it.tag_id = t.id
+            {where_clause}
+            GROUP BY i.id
+            ORDER BY i.uploaded_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+        
+        images = db.fetch_all(images_query, params)
+        
+        # Convert to ImageResponse objects
+        image_responses = []
+        for img in images:
+            tags = img['tag_names'].split(',') if img['tag_names'] else []
+            image_responses.append(ImageResponse(
+                id=img['id'],
+                title=img['title'],
+                caption=img['caption'],
+                alt_text=img['alt_text'],
+                url=img['url'],
+                thumbnail=img['thumbnail'],
+                uploader_id=img['uploader_id'],
+                uploaded_at=datetime.fromisoformat(img['uploaded_at'].replace('Z', '+00:00')),
+                privacy=PrivacyLevel(img['privacy']),
+                views=img['views'],
+                is_ai_generated=bool(img['is_ai_generated']),
+                width=img['width'],
+                height=img['height'],
+                size_bytes=img['size_bytes'],
+                format=ImageFormat(img['format']) if img['format'] else None,
+                tags=tags
+            ))
+        
+        return SearchResponse(
+            images=image_responses,
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=(total + limit - 1) // limit
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get images: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get images")
+
+@app.get("/images/{image_id}", response_model=ImageResponse)
+async def get_image(
+    image_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get a specific image by ID."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        db = DatabaseManager()
+        
+        # Get image with tags
+        image_query = """
+            SELECT i.*, GROUP_CONCAT(t.name) as tag_names
+            FROM images i
+            LEFT JOIN image_tags it ON i.id = it.image_id
+            LEFT JOIN tags t ON it.tag_id = t.id
+            WHERE i.id = ?
+            GROUP BY i.id
+        """
+        
+        img = db.fetch_one(image_query, (image_id,))
+        if not img:
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        # Check permissions
+        if (current_user['role'] != 'Admin' and 
+            img['privacy'] == 'private' and 
+            img['uploader_id'] != current_user['id']):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Increment view count
+        db.execute("UPDATE images SET views = views + 1 WHERE id = ?", (image_id,))
+        db.commit()
+        
+        tags = img['tag_names'].split(',') if img['tag_names'] else []
+        return ImageResponse(
+            id=img['id'],
+            title=img['title'],
+            caption=img['caption'],
+            alt_text=img['alt_text'],
+            url=img['url'],
+            thumbnail=img['thumbnail'],
+            uploader_id=img['uploader_id'],
+            uploaded_at=datetime.fromisoformat(img['uploaded_at'].replace('Z', '+00:00')),
+            privacy=PrivacyLevel(img['privacy']),
+            views=img['views'] + 1,  # Include the increment
+            is_ai_generated=bool(img['is_ai_generated']),
+            width=img['width'],
+            height=img['height'],
+            size_bytes=img['size_bytes'],
+            format=ImageFormat(img['format']) if img['format'] else None,
+            tags=tags
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get image")
 
 if __name__ == "__main__":
     import uvicorn
